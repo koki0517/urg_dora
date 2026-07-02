@@ -1,0 +1,16 @@
+urg_dora
+Copyright 2026 urg_dora contributors
+
+This product includes software derived from Hokuyo-aut/urg_node2,
+Copyright 2022 eSOL Co.,Ltd., licensed under the Apache License 2.0.
+https://github.com/Hokuyo-aut/urg_node2
+
+This product includes UrgNetwork/urg_library as a pinned Git submodule and
+builds its C API sources. urg_library is Copyright (c) 2010 urg network
+project and is distributed under the Simplified BSD License. See the
+submodule's current/COPYRIGHT.txt.
+https://github.com/UrgNetwork/urg_library
+
+The CMake dora bridge integration is adapted from dora-rs/dora's official
+CMake example, licensed under the Apache License 2.0.
+https://github.com/dora-rs/dora

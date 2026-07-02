@@ -1,0 +1,7 @@
+# This file's directory is dora's working directory, so paths are relative to dataflow/.
+nodes:
+  - id: urg-dora
+    path: ../build/urg_dora_node
+    args: ../config/urg_dora.yaml
+    outputs:
+      - scan
