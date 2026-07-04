@@ -4,42 +4,41 @@
 include(ExternalProject)
 
 set(DORA_ROOT_DIR "" CACHE PATH "Path to an existing dora-rs source checkout")
+set(DORA_TARGET_DIR "" CACHE PATH
+    "Optional shared cargo target directory for the dora checkout")
 set(DORA_GIT_TAG "25bac6b3e5ed7435f49bd494e0ff4ef81ee0a674" CACHE STRING
-    "dora-rs revision fetched when DORA_ROOT_DIR is empty")
+    "Deprecated: retained for compatibility with older build trees")
 
 set(dora_cxx_include_dir "${CMAKE_CURRENT_BINARY_DIR}/dora-cxx/include")
 set(node_bridge "${CMAKE_CURRENT_BINARY_DIR}/dora-cxx/dora-node-api.cc")
+set(_workspace_dora_source "${CMAKE_CURRENT_SOURCE_DIR}/../dora")
 
 if(DORA_ROOT_DIR)
   get_filename_component(_dora_source "${DORA_ROOT_DIR}" ABSOLUTE)
-  set(_dora_target "${_dora_source}/target")
-  set(dora_node_api_library "${_dora_target}/debug/${CMAKE_STATIC_LIBRARY_PREFIX}dora_node_api_cxx${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  ExternalProject_Add(DoraNodeApi
-    SOURCE_DIR "${_dora_source}"
-    BUILD_IN_SOURCE TRUE
-    PATCH_COMMAND "${CMAKE_COMMAND}" -DDORA_SOURCE_DIR=${_dora_source} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_dora_build_rs.cmake"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND "${CMAKE_COMMAND}" -E env CARGO_TARGET_DIR=${_dora_target} DORA_NODE_API_CXX_INSTALL=${_dora_target}/cxxbridge/dora-node-api-cxx/install cargo build --package dora-node-api-cxx --target-dir ${_dora_target}
-    BUILD_BYPRODUCTS "${dora_node_api_library}"
-    INSTALL_COMMAND ""
-  )
+elseif(EXISTS "${_workspace_dora_source}/Cargo.toml")
+  get_filename_component(_dora_source "${_workspace_dora_source}" ABSOLUTE)
 else()
-  set(_dora_source "${CMAKE_CURRENT_BINARY_DIR}/dora/src/DoraNodeApi")
-  set(_dora_target "${CMAKE_CURRENT_BINARY_DIR}/dora-target")
-  set(dora_node_api_library "${_dora_target}/debug/${CMAKE_STATIC_LIBRARY_PREFIX}dora_node_api_cxx${CMAKE_STATIC_LIBRARY_SUFFIX}")
-  ExternalProject_Add(DoraNodeApi
-    PREFIX "${CMAKE_CURRENT_BINARY_DIR}/dora"
-    GIT_REPOSITORY https://github.com/dora-rs/dora.git
-    GIT_TAG "${DORA_GIT_TAG}"
-    GIT_SHALLOW FALSE
-    BUILD_IN_SOURCE TRUE
-    PATCH_COMMAND "${CMAKE_COMMAND}" -DDORA_SOURCE_DIR=${_dora_source} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_dora_build_rs.cmake"
-    CONFIGURE_COMMAND ""
-    BUILD_COMMAND "${CMAKE_COMMAND}" -E env CARGO_TARGET_DIR=${_dora_target} DORA_NODE_API_CXX_INSTALL=${_dora_target}/cxxbridge/dora-node-api-cxx/install cargo build --package dora-node-api-cxx --target-dir ${_dora_target}
-    BUILD_BYPRODUCTS "${dora_node_api_library}"
-    INSTALL_COMMAND ""
-  )
+  message(FATAL_ERROR
+    "dora source not found. Set DORA_ROOT_DIR to a local dora checkout or "
+    "place a shared dora checkout at ../dora.")
 endif()
+
+if(DORA_TARGET_DIR)
+  get_filename_component(_dora_target "${DORA_TARGET_DIR}" ABSOLUTE)
+else()
+  set(_dora_target "${_dora_source}/target")
+endif()
+
+set(dora_node_api_library "${_dora_target}/debug/${CMAKE_STATIC_LIBRARY_PREFIX}dora_node_api_cxx${CMAKE_STATIC_LIBRARY_SUFFIX}")
+ExternalProject_Add(DoraNodeApi
+  SOURCE_DIR "${_dora_source}"
+  BUILD_IN_SOURCE TRUE
+  PATCH_COMMAND "${CMAKE_COMMAND}" -DDORA_SOURCE_DIR=${_dora_source} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_dora_build_rs.cmake"
+  CONFIGURE_COMMAND ""
+  BUILD_COMMAND "${CMAKE_COMMAND}" -E env CARGO_TARGET_DIR=${_dora_target} DORA_NODE_API_CXX_INSTALL=${_dora_target}/cxxbridge/dora-node-api-cxx/install cargo build --package dora-node-api-cxx --target-dir ${_dora_target}
+  BUILD_BYPRODUCTS "${dora_node_api_library}"
+  INSTALL_COMMAND ""
+)
 
 add_custom_command(
   OUTPUT "${node_bridge}" "${dora_cxx_include_dir}/dora-node-api.h"

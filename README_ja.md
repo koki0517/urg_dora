@@ -16,10 +16,16 @@
    cd urg_dora
    ```
 
-2. 下記の非 ROS 依存関係を入れます。特に Arrow C++ と `yaml-cpp` が必要です。dora CLI は次で入れます。
+共有ワークスペース構成にするなら、このリポジトリの隣に
+`../dora` を 1 つだけ置いて、複数パッケージで使い回すのが推奨です。
+このプロジェクトはその checkout の `target/` ディレクトリも共有し、
+複数パッケージで同じ dora 生成物を再利用します。
+
+2. 下記の非 ROS 依存関係を入れます。特に Arrow C++ と `yaml-cpp` が必要です。dora CLI は、このリポジトリが参照するのと同じ `../dora` ソースツリーから入れます。
 
    ```bash
-   cargo install dora-cli
+   cd ../dora
+   cargo install --path binaries/cli --locked --force
    ```
 
 3. ノードをビルドします。
@@ -29,15 +35,16 @@
    cmake --build build -j
    ```
 
-4. example dataflow を validate/run します。
+4. example dataflow を run します。
 
    ```bash
-   dora validate dataflow/urg_dora.yaml
    dora run dataflow/urg_dora.yaml
    ```
 
    この example dataflow は `build/urg_dora_node` と `config/urg_dora.yaml`
-   を前提にしています。
+   を前提にしています。さらに `_unstable_debug.enable_debug_inspection`
+   を有効にしてあるので、`dora up` + `dora start` の構成では `dora topic
+   echo/hz/info` が使えます。
 
 ## v0.1 の対象範囲
 
@@ -80,16 +87,18 @@ v0.1 で明示的に非対応:
 ## 依存関係
 
 - Linux、C++20 コンパイラ、CMake 3.21 以上、Rust/Cargo、Git
-- dora CLI（`cargo install dora-cli`）と、ソース互換の C++ node API
+- dora CLI（`cargo install --path binaries/cli --locked --force` で同じ dora ソースツリーから入れる）と、ソース互換の C++ node API
 - Apache Arrow C++（現行の dora C++ 例では Arrow 19.0.1 以上が必要）
 - yaml-cpp
 - urg_library C API（Git submodule として同梱）
 
-ビルドは dora の公式 CMake 例に合わせています。デフォルトでは CMake が `DORA_GIT_TAG` に記録された revision の公式 dora リポジトリを取得し、`dora-node-api-cxx` をビルドします。dora CLI 本体は別途 `cargo install dora-cli` で入れます。ローカルの dora checkout を使う場合は `-DDORA_ROOT_DIR=/path/to/dora` を指定してください。C++ API をその source tree からビルドしたいときに使います。
+ビルドは dora の公式 CMake 例に合わせていますが、優先的にはこのリポジトリの隣にある `../dora` を使って、同じワークスペース内の複数パッケージで 1 つの dora checkout とその `target/` を共有します。dora CLI 本体は同じ `../dora` ソースツリーから `cargo install --path binaries/cli --locked --force` で入れます。別のローカル dora checkout を使う場合は `-DDORA_ROOT_DIR=/path/to/dora` を指定してください。Cargo の成果物の置き場所を分けたい場合は `-DDORA_TARGET_DIR=/path/to/shared/target` を指定できます。
 
 このリポジトリは submodule を含むので、clone は recursive で行うのが簡単です。
 
 既存 checkout の場合は `git submodule update --init --recursive` を実行してください。CMake は必要な urg_library の C ソースを直接コンパイルするため、urg_library の別ビルドやインストールは不要です。必要なら `URG_LIBRARY_ROOT` で事前インストール済みの外部版を明示できます。
+
+`../dora` が存在しない場合は、別の dora checkout を `DORA_ROOT_DIR` で指定してください。C++ API のビルドに別途 dora clone は不要です。共有 checkout の `target/` を使いたくない場合のみ `DORA_TARGET_DIR` を変えてください。
 
 upstream の `urg_node2` と違い、このプロジェクトは rosdep、ament、ROS2 パッケージを使いません。具体的には `rclcpp`、`rclcpp_components`、`rclcpp_lifecycle`、`lifecycle_msgs`、`sensor_msgs`、`diagnostic_updater`、`laser_proc` には依存しません。残る非 ROS 依存は Arrow C++、yaml-cpp、CMake/C++ ツールチェーン、Rust/Cargo、Git、dora CLI です。
 
@@ -107,7 +116,7 @@ cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-`DORA_ROOT_DIR` を省略すると、CMake が pinned された公式 dora revision を取得します。ハードウェア非依存のテストは config 読み込みと hardware-clock synchronizer を対象にしており、LiDAR 自体はテストしません。
+`DORA_ROOT_DIR` を省略すると、共有の `../dora` checkout を使います。`DORA_TARGET_DIR` も省略すると、その checkout の `target/` を共有ビルド先として使います。ハードウェア非依存のテストは config 読み込みと hardware-clock synchronizer を対象にしており、LiDAR 自体はテストしません。
 
 ## 設定
 
@@ -135,10 +144,9 @@ error_reset_period: 5.0
 
 ## dora での実行
 
-[`dataflow/urg_dora.yaml`](dataflow/urg_dora.yaml) は true な source node です。inputs はなく、`scan` output を dora 側で宣言しています。パスは dataflow ファイルのディレクトリ基準です。
+[`dataflow/urg_dora.yaml`](dataflow/urg_dora.yaml) は true な source node です。inputs はなく、`scan` output を dora 側で宣言しています。さらに `_unstable_debug.enable_debug_inspection` を有効にしてあるので、`dora topic echo`、`dora topic hz`、`dora topic info` が使えます。パスは dataflow ファイルのディレクトリ基準です。
 
 ```bash
-dora validate dataflow/urg_dora.yaml
 dora run dataflow/urg_dora.yaml
 ```
 
@@ -164,7 +172,8 @@ dora run dataflow/urg_dora.yaml
 - shutdown の応答性は urg_library の blocking network call に依存します
 - dataflow には dora の type URN を付けていません。上記の Arrow schema は C Data Interface 経由で伝わる前提で、ここに明記しています
 - このプロジェクトは CMake で pinned した official dora C++ API revision を対象にしています。dora API が変わる場合は `DORA_ROOT_DIR` を意図的に切り替えてください
+- 複数の dora checkout を使い分ける場合は `DORA_TARGET_DIR` も設定して、各 checkout の Cargo 成果物が混ざらないようにしてください
 
 ## ライセンスと帰属
 
-このプロジェクトは Apache-2.0 ライセンスです。port した箇所には `urg_node2` の eSOL 著作権表示と Apache-2.0 notice を残しています。urg_library は Simplified BSD ライセンスで、Git submodule として固定し、その C API ソースを node に組み込んでいます。dora の CMake bridge integration は dora の Apache-2.0 公式 example を元にしています。帰属の概要は [`NOTICE`](NOTICE) を参照してください。各 upstream リポジトリの完全な license もあわせて確認してください。
+このプロジェクトは Apache-2.0 ライセンスです。port した箇所には `urg_node2` の eSOL 著作権表示と Apache-2.0 notice を残しています。urg_library は Simplified BSD ライセンスで、Git submodule として固定し、その C API ソースを node に組み込んでいます。推奨構成はワークスペース内の兄弟ディレクトリ `../dora` を共有し、その `target/` も複数パッケージで共有する方法です。dora の CMake bridge integration は dora の Apache-2.0 公式 example を元にしています。帰属の概要は [`NOTICE`](NOTICE) を参照してください。各 upstream リポジトリの完全な license もあわせて確認してください。

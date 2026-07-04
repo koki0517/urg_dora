@@ -21,12 +21,14 @@ int main(int argc, char **argv) {
     const std::string config_path = argc > 1 ? argv[1] : "config/urg_dora.yaml";
     const auto config = urg_dora::load_config(config_path);
     auto dora_node = init_dora_node();
-    std::cout << "Loaded configuration from " << config_path << '\n';
+    std::cout.setf(std::ios::unitbuf);
+    std::cerr.setf(std::ios::unitbuf);
+    std::cout << "Loaded configuration from " << config_path << std::endl;
 
     urg_dora::UrgDoraNode node(config, dora_node);
     return node.run();
   } catch (const std::exception &error) {
-    std::cerr << "urg_dora fatal error: " << error.what() << '\n';
+    std::cerr << "urg_dora fatal error: " << error.what() << std::endl;
     return 1;
   }
 }

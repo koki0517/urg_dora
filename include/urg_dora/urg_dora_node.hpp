@@ -95,6 +95,9 @@ private:
   std::chrono::nanoseconds user_latency_{0};
   TimeSynchronizer time_synchronizer_;
   std::uint64_t scan_count_ = 0;
+  std::chrono::nanoseconds read_get_distance_accumulator_{0};
+  std::chrono::nanoseconds read_synchronize_accumulator_{0};
+  std::chrono::nanoseconds read_finalize_accumulator_{0};
 };
 
 } // namespace urg_dora

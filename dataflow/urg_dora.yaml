@@ -1,3 +1,7 @@
+# Topic inspection commands (`dora topic echo/hz/info`) require this flag.
+_unstable_debug:
+  enable_debug_inspection: true
+
 # This file's directory is dora's working directory, so paths are relative to dataflow/.
 nodes:
   - id: urg-dora

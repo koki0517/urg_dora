@@ -109,12 +109,29 @@ int UrgDoraNode::run() {
 
     int error_count = 0;
     auto error_window_start = std::chrono::system_clock::now();
+    std::chrono::nanoseconds read_accumulator = std::chrono::nanoseconds::zero();
+    std::chrono::nanoseconds send_accumulator = std::chrono::nanoseconds::zero();
+    std::chrono::nanoseconds loop_accumulator = std::chrono::nanoseconds::zero();
+    std::uint64_t window_count = 0;
     while (connected_ && !dora_stop_requested()) {
+      const auto loop_start = std::chrono::steady_clock::now();
       Scan scan;
-      if (read_scan(scan)) {
+      const auto read_start = std::chrono::steady_clock::now();
+      const bool read_ok = read_scan(scan);
+      const auto read_end = std::chrono::steady_clock::now();
+      read_accumulator +=
+          std::chrono::duration_cast<std::chrono::nanoseconds>(read_end - read_start);
+      if (read_ok) {
+        const auto send_start = std::chrono::steady_clock::now();
         if (!send_scan(scan)) {
           return 1;
         }
+        const auto send_end = std::chrono::steady_clock::now();
+        send_accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(
+            send_end - send_start);
+        loop_accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(
+            send_end - loop_start);
+        ++window_count;
         ++scan_count_;
         const auto scans_per_report = static_cast<std::uint64_t>(std::max(
             1.0,
@@ -124,8 +141,53 @@ int UrgDoraNode::run() {
               1.0 / (scan_period_seconds_ * (config_.skip + 1));
           std::cout << "scan count=" << scan_count_
                     << " expected_frequency=" << frequency << " Hz\n";
+          if (window_count > 0) {
+            const double read_ms = std::chrono::duration<double, std::milli>(
+                                  read_accumulator)
+                                  .count() /
+                              static_cast<double>(window_count);
+            const double read_get_ms =
+                std::chrono::duration<double, std::milli>(
+                    read_get_distance_accumulator_)
+                    .count() /
+                static_cast<double>(window_count);
+            const double read_sync_ms =
+                std::chrono::duration<double, std::milli>(
+                    read_synchronize_accumulator_)
+                    .count() /
+                static_cast<double>(window_count);
+            const double read_finalize_ms =
+                std::chrono::duration<double, std::milli>(
+                    read_finalize_accumulator_)
+                    .count() /
+                static_cast<double>(window_count);
+            const double send_ms = std::chrono::duration<double, std::milli>(
+                                  send_accumulator)
+                                  .count() /
+                              static_cast<double>(window_count);
+            const double loop_ms = std::chrono::duration<double, std::milli>(
+                                  loop_accumulator)
+                                  .count() /
+                              static_cast<double>(window_count);
+            std::cout << "scan timing avg over last " << window_count
+                      << " scans: read_ms=" << read_ms
+                      << " read_get_ms=" << read_get_ms
+                      << " read_sync_ms=" << read_sync_ms
+                      << " read_finalize_ms=" << read_finalize_ms
+                      << " send_ms=" << send_ms
+                      << " loop_ms=" << loop_ms << '\n';
+          }
+          read_accumulator = std::chrono::nanoseconds::zero();
+          send_accumulator = std::chrono::nanoseconds::zero();
+          loop_accumulator = std::chrono::nanoseconds::zero();
+          read_get_distance_accumulator_ = std::chrono::nanoseconds::zero();
+          read_synchronize_accumulator_ = std::chrono::nanoseconds::zero();
+          read_finalize_accumulator_ = std::chrono::nanoseconds::zero();
+          window_count = 0;
         }
       } else {
+        loop_accumulator += std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now() - loop_start);
         ++error_count;
         std::cerr << "Could not get single-echo scan (" << error_count << "/"
                   << config_.error_limit << "): " << urg_error(&urg_) << '\n';
@@ -183,19 +245,21 @@ bool UrgDoraNode::dora_stop_requested() {
 }
 
 bool UrgDoraNode::connect() {
-  std::cout << "Connecting to Hokuyo at " << config_.ip_address << ':'
-            << config_.ip_port << "\n";
+  std::cerr << "Connecting to Hokuyo at " << config_.ip_address << ':'
+            << config_.ip_port << std::endl;
   const int result = urg_open(&urg_, URG_ETHERNET, config_.ip_address.c_str(),
                               config_.ip_port);
   if (result < 0) {
-    std::cerr << "Could not open network Hokuyo: " << urg_error(&urg_) << '\n';
+    std::cerr << "Could not open network Hokuyo: " << urg_error(&urg_)
+              << std::endl;
     return false;
   }
   connected_ = true;
   scan_period_seconds_ = 1.0e-6 * static_cast<double>(urg_scan_usec(&urg_));
-  std::cout << "Connected: product=" << urg_sensor_product_type(&urg_)
+  std::cerr << "Connected: product=" << urg_sensor_product_type(&urg_)
             << " serial=" << urg_sensor_serial_id(&urg_)
-            << " firmware=" << urg_sensor_firmware_version(&urg_) << '\n';
+            << " firmware=" << urg_sensor_firmware_version(&urg_)
+            << std::endl;
   return true;
 }
 
@@ -280,8 +344,13 @@ void UrgDoraNode::stop_measurement() {
 bool UrgDoraNode::read_scan(Scan &scan) {
   long hardware_timestamp_ms = 0;
   const SystemTime receive_time = system_now();
+  const auto get_distance_start = std::chrono::steady_clock::now();
   const int beam_count =
       urg_get_distance(&urg_, distances_.data(), &hardware_timestamp_ms);
+  const auto get_distance_end = std::chrono::steady_clock::now();
+  read_get_distance_accumulator_ +=
+      std::chrono::duration_cast<std::chrono::nanoseconds>(get_distance_end -
+                                                            get_distance_start);
   if (beam_count <= 0) {
     return false;
   }
@@ -292,14 +361,20 @@ bool UrgDoraNode::read_scan(Scan &scan) {
 
   SystemTime stamp = receive_time;
   if (config_.synchronize_time) {
+    const auto synchronize_start = std::chrono::steady_clock::now();
     bool clock_warp = false;
     stamp = time_synchronizer_.synchronize(hardware_timestamp_ms, receive_time,
                                            &clock_warp);
+    const auto synchronize_end = std::chrono::steady_clock::now();
+    read_synchronize_accumulator_ +=
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            synchronize_end - synchronize_start);
     if (clock_warp) {
-      std::cerr << "Detected clock warp; reset timestamp EMA\n";
+        std::cerr << "Detected clock warp; reset timestamp EMA" << std::endl;
     }
   }
 
+  const auto finalize_start = std::chrono::steady_clock::now();
   // This mirrors urg_node2 exactly. calibrate_system_latency() already adds
   // angular_time_offset(), and this expression adds it again. The apparent
   // double offset is retained for header.stamp compatibility with upstream.
@@ -322,6 +397,10 @@ bool UrgDoraNode::read_scan(Scan &scan) {
             : static_cast<float>(distances_[static_cast<std::size_t>(index)]) /
                   1000.0F;
   }
+  const auto finalize_end = std::chrono::steady_clock::now();
+  read_finalize_accumulator_ +=
+      std::chrono::duration_cast<std::chrono::nanoseconds>(finalize_end -
+                                                           finalize_start);
   return true;
 }
 
@@ -359,8 +438,8 @@ void UrgDoraNode::calibrate_system_latency(std::size_t measurements) {
     return;
   }
 
-  std::cout << "Starting experimental time calibration (" << measurements
-            << " measurements)\n";
+    std::cerr << "Starting experimental time calibration (" << measurements
+              << " measurements)" << std::endl;
   system_latency_ = std::chrono::nanoseconds::zero();
   try {
     const auto starting_offset = get_native_clock_offset(1);
@@ -379,9 +458,9 @@ void UrgDoraNode::calibrate_system_latency(std::size_t measurements) {
     }
 
     system_latency_ = median(offsets) + angular_time_offset();
-    std::cout << "Time calibration finished: latency="
+    std::cerr << "Time calibration finished: latency="
               << std::chrono::duration<double>(system_latency_).count()
-              << " s\n";
+              << " s" << std::endl;
   } catch (const std::exception &error) {
     stop_measurement();
     system_latency_ = std::chrono::nanoseconds::zero();
@@ -531,7 +610,7 @@ UrgDoraNode::make_scan_array(const Scan &scan) const {
 
 void UrgDoraNode::log_startup_details() const {
   const double frequency = 1.0 / (scan_period_seconds_ * (config_.skip + 1));
-  std::cout << "Configured single-echo Ethernet scan: steps=[" << first_step_
+  std::cerr << "Configured single-echo Ethernet scan: steps=[" << first_step_
             << ',' << last_step_ << "] angles=[" << angle_min_ << ','
             << angle_max_ << "] rad cluster=" << config_.cluster
             << " skip=" << config_.skip
@@ -539,7 +618,7 @@ void UrgDoraNode::log_startup_details() const {
             << " s expected_frequency=" << frequency
             << " Hz calibrate_time=" << std::boolalpha << config_.calibrate_time
             << " synchronize_time=" << config_.synchronize_time
-            << std::noboolalpha << '\n';
+            << std::noboolalpha << std::endl;
 }
 
 } // namespace urg_dora
