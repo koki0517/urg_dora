@@ -7,6 +7,38 @@
 
 英語版の README は [`README.md`](README.md) を参照してください。
 
+## クイックスタート
+
+1. submodule 付きで clone します。
+
+   ```bash
+   git clone --recurse-submodules <urg_dora-repository-url>
+   cd urg_dora
+   ```
+
+2. 下記の非 ROS 依存関係を入れます。特に Arrow C++ と `yaml-cpp` が必要です。dora CLI は次で入れます。
+
+   ```bash
+   cargo install dora-cli
+   ```
+
+3. ノードをビルドします。
+
+   ```bash
+   cmake -S . -B build
+   cmake --build build -j
+   ```
+
+4. example dataflow を validate/run します。
+
+   ```bash
+   dora validate dataflow/urg_dora.yaml
+   dora run dataflow/urg_dora.yaml
+   ```
+
+   この example dataflow は `build/urg_dora_node` と `config/urg_dora.yaml`
+   を前提にしています。
+
 ## v0.1 の対象範囲
 
 対応:
@@ -48,19 +80,14 @@ v0.1 で明示的に非対応:
 ## 依存関係
 
 - Linux、C++20 コンパイラ、CMake 3.21 以上、Rust/Cargo、Git
-- dora CLI と、ソース互換の C++ node API
+- dora CLI（`cargo install dora-cli`）と、ソース互換の C++ node API
 - Apache Arrow C++（現行の dora C++ 例では Arrow 19.0.1 以上が必要）
 - yaml-cpp
 - urg_library C API（Git submodule として同梱）
 
-ビルドは dora の公式 CMake 例に合わせています。デフォルトでは CMake が `DORA_GIT_TAG` に記録された revision の公式 dora リポジトリを取得し、`dora-node-api-cxx` をビルドします。ローカルの dora checkout を使う場合は `-DDORA_ROOT_DIR=/path/to/dora` を指定してください。インストール済み dora CLI と C++ API の版を揃えたいときに有効です。
+ビルドは dora の公式 CMake 例に合わせています。デフォルトでは CMake が `DORA_GIT_TAG` に記録された revision の公式 dora リポジトリを取得し、`dora-node-api-cxx` をビルドします。dora CLI 本体は別途 `cargo install dora-cli` で入れます。ローカルの dora checkout を使う場合は `-DDORA_ROOT_DIR=/path/to/dora` を指定してください。C++ API をその source tree からビルドしたいときに使います。
 
 このリポジトリは submodule を含むので、clone は recursive で行うのが簡単です。
-
-```bash
-git clone --recurse-submodules <urg_dora-repository-url>
-cd urg_dora
-```
 
 既存 checkout の場合は `git submodule update --init --recursive` を実行してください。CMake は必要な urg_library の C ソースを直接コンパイルするため、urg_library の別ビルドやインストールは不要です。必要なら `URG_LIBRARY_ROOT` で事前インストール済みの外部版を明示できます。
 
@@ -75,13 +102,12 @@ Arrow と yaml-cpp は OS のパッケージマネージャで入れてくださ
 このリポジトリのルートで:
 
 ```bash
-cmake -S . -B build \
-  -DDORA_ROOT_DIR="$HOME/src/dora"
+cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-`DORA_ROOT_DIR` を省略すると、ビルド時に pinned された公式 dora revision を取得します。`DORA_ROOT_DIR` を省略しても、同じく CMake が pinned revision を取得する動きです。ハードウェア非依存のテストは config 読み込みと hardware-clock synchronizer を対象にしており、LiDAR 自体はテストしません。
+`DORA_ROOT_DIR` を省略すると、CMake が pinned された公式 dora revision を取得します。ハードウェア非依存のテストは config 読み込みと hardware-clock synchronizer を対象にしており、LiDAR 自体はテストしません。
 
 ## 設定
 
@@ -115,6 +141,8 @@ error_reset_period: 5.0
 dora validate dataflow/urg_dora.yaml
 dora run dataflow/urg_dora.yaml
 ```
+
+リポジトリ root から実行すれば、`dataflow/urg_dora.yaml` は `dataflow/` ディレクトリ基準でノード binary と config を解決します。例の layout では path の修正は不要です。
 
 現在の dora source node は、入力が 0 個でも自動的に `AllInputsClosed` を受け取りません。そのため C++ ノードは自前でスキャン処理を回し、スキャン間や再接続待ちの間に公式の non-blocking `try_next_event()` を使って `Stop` を監視します。URG の blocking I/O は socket timeout まで停止応答を遅らせます。
 

@@ -9,6 +9,39 @@ sensor communication. It has no ROS2 dependency and emits one Apache Arrow
 
 日本語版の README は [`README_ja.md`](README_ja.md) を参照してください。
 
+## Quickstart
+
+1. Clone with the submodule:
+
+   ```bash
+   git clone --recurse-submodules <urg_dora-repository-url>
+   cd urg_dora
+   ```
+
+2. Install the non-ROS dependencies listed below, especially a working Arrow C++
+   and `yaml-cpp` installation. Install the dora CLI with:
+
+   ```bash
+   cargo install dora-cli
+   ```
+
+3. Build the node:
+
+   ```bash
+   cmake -S . -B build
+   cmake --build build -j
+   ```
+
+4. Validate and run the example dataflow:
+
+   ```bash
+   dora validate dataflow/urg_dora.yaml
+   dora run dataflow/urg_dora.yaml
+   ```
+
+   The example dataflow expects the built binary at `build/urg_dora_node` and
+   the default config at `config/urg_dora.yaml`.
+
 ## v0.1 scope
 
 Supported:
@@ -52,24 +85,20 @@ step range, and clustering and is therefore not part of the static schema.
 ## Dependencies
 
 - Linux with a C++20 compiler, CMake 3.21+, Rust/Cargo, and Git
-- dora CLI and source-compatible C++ node API
+- dora CLI (`cargo install dora-cli`) and source-compatible C++ node API
 - Apache Arrow C++ (the current dora example requires Arrow 19.0.1 or newer)
 - yaml-cpp
 - urg_library C API (included as a pinned Git submodule)
 
 The build follows dora's official CMake example. By default CMake fetches the
 official dora repository at the revision recorded in `DORA_GIT_TAG` and builds
-`dora-node-api-cxx`. To use a local dora checkout instead, pass
-`-DDORA_ROOT_DIR=/path/to/dora`. This is useful when the installed dora CLI and
-C++ API need to be pinned to the same release.
+`dora-node-api-cxx`. The dora CLI itself is installed separately with
+`cargo install dora-cli`. To use a local dora checkout instead, pass
+`-DDORA_ROOT_DIR=/path/to/dora` if you explicitly want the C++ API build to use
+that source tree.
 
 Clone this repository recursively so the pinned urg_library revision is checked
 out automatically:
-
-```bash
-git clone --recurse-submodules <urg_dora-repository-url>
-cd urg_dora
-```
 
 For an existing non-recursive checkout, run
 `git submodule update --init --recursive`. CMake compiles the required
@@ -92,16 +121,14 @@ official installation instructions are linked from the
 From this repository:
 
 ```bash
-cmake -S . -B build \
-  -DDORA_ROOT_DIR="$HOME/src/dora"
+cmake -S . -B build
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Omit `DORA_ROOT_DIR` to fetch the pinned official dora revision during the
-build. Omit `DORA_ROOT_DIR` as well to let CMake fetch the pinned official dora
-revision. The hardware-independent tests cover config loading and the
-hardware-clock synchronizer; they do not pretend to test a LiDAR.
+Omit `DORA_ROOT_DIR` to let CMake fetch the pinned official dora revision.
+The hardware-independent tests cover config loading and the hardware-clock
+synchronizer; they do not pretend to test a LiDAR.
 
 ## Configuration
 
@@ -144,6 +171,10 @@ Paths are relative to the dataflow file's directory.
 dora validate dataflow/urg_dora.yaml
 dora run dataflow/urg_dora.yaml
 ```
+
+From the repository root, `dataflow/urg_dora.yaml` resolves the node binary and
+config relative to the `dataflow/` directory, so no path edits are needed for
+the example layout.
 
 Current dora source nodes do not receive `AllInputsClosed` merely because they
 have zero inputs. The C++ node therefore drives scans itself and uses the

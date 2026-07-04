@@ -17,8 +17,9 @@ if(DORA_ROOT_DIR)
   ExternalProject_Add(DoraNodeApi
     SOURCE_DIR "${_dora_source}"
     BUILD_IN_SOURCE TRUE
+    PATCH_COMMAND "${CMAKE_COMMAND}" -DDORA_SOURCE_DIR=${_dora_source} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_dora_build_rs.cmake"
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND cargo build --package dora-node-api-cxx
+    BUILD_COMMAND "${CMAKE_COMMAND}" -E env CARGO_TARGET_DIR=${_dora_target} DORA_NODE_API_CXX_INSTALL=${_dora_target}/cxxbridge/dora-node-api-cxx/install cargo build --package dora-node-api-cxx --target-dir ${_dora_target}
     BUILD_BYPRODUCTS "${dora_node_api_library}"
     INSTALL_COMMAND ""
   )
@@ -32,8 +33,9 @@ else()
     GIT_TAG "${DORA_GIT_TAG}"
     GIT_SHALLOW FALSE
     BUILD_IN_SOURCE TRUE
+    PATCH_COMMAND "${CMAKE_COMMAND}" -DDORA_SOURCE_DIR=${_dora_source} -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/patch_dora_build_rs.cmake"
     CONFIGURE_COMMAND ""
-    BUILD_COMMAND cargo build --package dora-node-api-cxx --target-dir "${_dora_target}"
+    BUILD_COMMAND "${CMAKE_COMMAND}" -E env CARGO_TARGET_DIR=${_dora_target} DORA_NODE_API_CXX_INSTALL=${_dora_target}/cxxbridge/dora-node-api-cxx/install cargo build --package dora-node-api-cxx --target-dir ${_dora_target}
     BUILD_BYPRODUCTS "${dora_node_api_library}"
     INSTALL_COMMAND ""
   )
