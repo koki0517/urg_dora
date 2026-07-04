@@ -6,6 +6,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(URG_DORA_BUILD_TESTS "Build hardware-independent tests" ON)
+option(URG_DORA_USE_DORA_SOURCE
+  "Build dora C++ API from a local dora source checkout"
+  OFF)
 set(URG_LIBRARY_ROOT "" CACHE PATH
     "Optional external urg_library root; empty uses the bundled submodule")
 
@@ -59,32 +62,36 @@ else()
   set(URG_C_TARGET urg_c)
 endif()
 
-include(cmake/DoraTargets.cmake)
-
 add_executable(urg_dora_node
   src/main.cpp
   src/config.cpp
   src/time_sync.cpp
   src/urg_dora_node.cpp
-  "${node_bridge}"
 )
-add_dependencies(urg_dora_node Dora_cxx)
-target_include_directories(urg_dora_node PRIVATE
-  "${CMAKE_CURRENT_SOURCE_DIR}/include"
-  "${dora_cxx_include_dir}"
-  "${URG_INCLUDE_DIR}"
-)
+target_include_directories(urg_dora_node PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_options(urg_dora_node PRIVATE -Wall -Wextra -Wpedantic)
+
+if(URG_DORA_USE_DORA_SOURCE)
+  include(cmake/DoraTargets.cmake)
+  target_sources(urg_dora_node PRIVATE "${node_bridge}")
+  add_dependencies(urg_dora_node Dora_cxx)
+  target_include_directories(urg_dora_node PRIVATE "${dora_cxx_include_dir}")
+  target_link_libraries(urg_dora_node PRIVATE "${dora_node_api_library}")
+else()
+  find_package(dora-node-api-cxx CONFIG REQUIRED)
+  target_sources(urg_dora_node PRIVATE ${dora-node-api-cxx_CXX_BRIDGE_FILES})
+  target_link_libraries(urg_dora_node PRIVATE
+    dora-node-api-cxx::dora-node-api-cxx
+    dora-node-api-cxx::extra
+  )
+endif()
+
+target_include_directories(urg_dora_node PRIVATE "${URG_INCLUDE_DIR}")
 target_link_libraries(urg_dora_node PRIVATE
   Arrow::arrow_shared
   "${URG_DORA_YAML_TARGET}"
   "${URG_C_TARGET}"
-  "${dora_node_api_library}"
-  ${CMAKE_DL_LIBS}
 )
-if(UNIX)
-  target_link_libraries(urg_dora_node PRIVATE pthread m rt)
-endif()
-target_compile_options(urg_dora_node PRIVATE -Wall -Wextra -Wpedantic)
 
 install(TARGETS urg_dora_node RUNTIME DESTINATION bin)
 install(FILES config/urg_dora.yaml DESTINATION share/urg_dora/config)

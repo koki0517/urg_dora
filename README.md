@@ -11,30 +11,30 @@ sensor communication. It has no ROS2 dependency and emits one Apache Arrow
 
 ## Quickstart
 
-1. Clone with the submodule:
+1. Clone this repository with the submodule:
 
    ```bash
    git clone --recurse-submodules <urg_dora-repository-url>
    cd urg_dora
    ```
 
-   For a shared workspace layout, keep a single dora checkout at `../dora`
-   next to this repository. This project reuses that checkout's `target/`
-   directory, so multiple packages can share the same compiled dora artifacts.
-
-2. Install the non-ROS dependencies listed below, especially a working Arrow C++
-   and `yaml-cpp` installation. Install the dora CLI from the same source tree
-   as the checked-out `dora` repository:
+2. Download and extract the prebuilt dora C++ package for your platform, then
+   point `CMAKE_PREFIX_PATH` at that extracted directory. For example:
 
    ```bash
-   cd ../dora
-   cargo install --path binaries/cli --locked --force
+   cmake -S . -B build \
+     -DCMAKE_PREFIX_PATH=/home/koki/dora_ws/dora-cpp-libraries-linux-x86_64
+   ```
+
+   The dora CLI is still installed separately, for example with:
+
+   ```bash
+   cargo install dora-cli
    ```
 
 3. Build the node:
 
    ```bash
-   cmake -S . -B build
    cmake --build build -j
    ```
 
@@ -92,20 +92,12 @@ step range, and clustering and is therefore not part of the static schema.
 ## Dependencies
 
 - Linux with a C++20 compiler, CMake 3.21+, Rust/Cargo, and Git
-- dora CLI built from the same dora source tree (`cargo install --path binaries/cli --locked --force`)
-  and source-compatible C++ node API
+- dora CLI (`cargo install dora-cli` or the official installation method)
+- prebuilt dora C++ libraries extracted from a `dora-cpp-libraries-<target>`
+  archive published by dora-rs
 - Apache Arrow C++ (the current dora example requires Arrow 19.0.1 or newer)
 - yaml-cpp
 - urg_library C API (included as a pinned Git submodule)
-
-The build follows dora's official CMake example, but it prefers a shared dora
-checkout at `../dora` next to this repository so multiple packages in the same
-workspace can reuse one copy and the same `target/` directory. The dora CLI
-itself is installed separately from that checkout with
-`cargo install --path binaries/cli --locked --force`. To use a different local
-dora checkout instead, pass `-DDORA_ROOT_DIR=/path/to/dora`.
-To override the shared Cargo build directory, pass
-`-DDORA_TARGET_DIR=/path/to/shared/target`.
 
 Clone this repository recursively so the pinned urg_library revision is checked
 out automatically:
@@ -116,10 +108,14 @@ urg_library C sources directly; no separate urg_library build or installation
 is needed. `URG_LIBRARY_ROOT` remains available as an explicit override for a
 prebuilt external installation.
 
-If `../dora` does not exist, point `DORA_ROOT_DIR` at another dora checkout.
-No separate dora clone is required beyond one checked-out source tree.
-If you need to isolate build artifacts from the shared workspace checkout,
-override `DORA_TARGET_DIR` as well.
+Package mode is the default: `find_package(dora-node-api-cxx CONFIG REQUIRED)`
+locates the prebuilt dora C++ archive, checks that the archive target matches
+the current host, and exposes `${dora-node-api-cxx_CXX_BRIDGE_FILES}` plus
+the `dora-node-api-cxx::dora-node-api-cxx` and `dora-node-api-cxx::extra`
+targets. No dora source checkout is needed in this mode.
+
+If you need the older source-based workflow for development, enable the
+fallback mode explicitly with `-DURG_DORA_USE_DORA_SOURCE=ON -DDORA_ROOT_DIR=/path/to/dora`.
 
 Unlike upstream `urg_node2`, this project does not use rosdep, ament, or ROS2
 packages. In particular, it does not depend on `rclcpp`, `rclcpp_components`,
@@ -136,13 +132,21 @@ official installation instructions are linked from the
 From this repository:
 
 ```bash
-cmake -S . -B build
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH=/home/koki/dora_ws/dora-cpp-libraries-linux-x86_64
 cmake --build build -j
 ctest --test-dir build --output-on-failure
 ```
 
-Omit `DORA_ROOT_DIR` to use the shared `../dora` checkout. Omit
-`DORA_TARGET_DIR` to share that checkout's `target/` directory.
+To exercise the fallback source mode, configure a separate build tree with:
+
+```bash
+cmake -S . -B build-source \
+  -DURG_DORA_USE_DORA_SOURCE=ON \
+  -DDORA_ROOT_DIR=/path/to/dora
+cmake --build build-source -j
+```
+
 The hardware-independent tests cover config loading and the hardware-clock
 synchronizer; they do not pretend to test a LiDAR.
 
@@ -156,8 +160,8 @@ ip_address: "192.168.0.10"
 ip_port: 10940
 frame_id: "laser"
 
-angle_min: -3.141592653589793
-angle_max: 3.141592653589793
+angle_min: -1.4
+angle_max: 1.4
 cluster: 1
 skip: 0
 
@@ -169,13 +173,12 @@ error_limit: 4
 error_reset_period: 5.0
 ```
 
-Angles are clipped to `[-pi, pi]`, `cluster` to `[1, 99]`, and `skip` to
-`[0, 9]`, matching `urg_node2`. URG then clips/rounds angles to device steps;
-the output metadata reports those actual steps. A reconnect stops and closes
-the sensor, reopens Ethernet, reapplies scanning parameters, reruns calibration
-when enabled, resets synchronization state, and restarts measurement. As in
-upstream, reconnect happens when the error count is strictly greater than
-`error_limit`; the count is cleared every `error_reset_period` seconds.
+`cluster` is clamped to `[1, 99]` and `skip` to `[0, 9]`, matching
+`urg_node2`. A reconnect stops and closes the sensor, reopens Ethernet,
+reapplies scanning parameters, reruns calibration when enabled, resets
+synchronization state, and restarts measurement. As in upstream, reconnect
+happens when the error count is strictly greater than `error_limit`; the count
+is cleared every `error_reset_period` seconds.
 
 ## Run with dora
 
@@ -230,18 +233,18 @@ EMA reset. Runtime validation requires a real Hokuyo; none is fabricated here.
 - Shutdown responsiveness is bounded by urg_library's blocking network call.
 - The dataflow does not attach a dora type URN; the exact Arrow schema above is
   carried by the Arrow C Data Interface and documented here.
-- This project currently targets the official dora C++ API revision pinned in
-  CMake. Override `DORA_ROOT_DIR` deliberately when dora APIs change.
-- If you build against multiple dora checkouts, set `DORA_TARGET_DIR` so each
-  checkout keeps its own Cargo artifacts.
+- Package mode expects a matching `dora-cpp-libraries-<target>` archive for
+  the host you are building on; the package config aborts early if the target
+  triple does not match.
+- The source-based fallback remains available for development, but it is no
+  longer the default path.
 
 ## License and attribution
 
 This project is Apache-2.0 licensed. Ported sections retain the eSOL copyright
 and Apache-2.0 notice from `urg_node2`. urg_library is Simplified BSD licensed
 and is pinned as a Git submodule whose C API sources are compiled into the
-node. The recommended shared workspace layout is a sibling `../dora` checkout
-used by multiple packages, with that checkout's `target/` directory shared
-across them. The dora CMake bridge integration is adapted from dora's
-Apache-2.0 official example. See [`NOTICE`](NOTICE) for the attribution
+node. The package-mode C++ integration follows dora's official
+`dora-node-api-cxx` CMake contract. The source-based fallback is retained only
+for development and compatibility. See [`NOTICE`](NOTICE) for the attribution
 summary and each upstream repository for its full license.

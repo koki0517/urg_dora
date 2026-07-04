@@ -71,7 +71,6 @@ private:
   void reset_time_state();
 
   std::shared_ptr<arrow::Array> make_scan_array(const Scan &scan) const;
-  void log_startup_details() const;
 
   Config config_;
   DoraNode &dora_node_;
@@ -94,10 +93,6 @@ private:
   std::chrono::nanoseconds system_latency_{0};
   std::chrono::nanoseconds user_latency_{0};
   TimeSynchronizer time_synchronizer_;
-  std::uint64_t scan_count_ = 0;
-  std::chrono::nanoseconds read_get_distance_accumulator_{0};
-  std::chrono::nanoseconds read_synchronize_accumulator_{0};
-  std::chrono::nanoseconds read_finalize_accumulator_{0};
 };
 
 } // namespace urg_dora

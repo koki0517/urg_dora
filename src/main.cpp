@@ -23,7 +23,6 @@ int main(int argc, char **argv) {
     auto dora_node = init_dora_node();
     std::cout.setf(std::ios::unitbuf);
     std::cerr.setf(std::ios::unitbuf);
-    std::cout << "Loaded configuration from " << config_path << std::endl;
 
     urg_dora::UrgDoraNode node(config, dora_node);
     return node.run();
