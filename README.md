@@ -32,7 +32,7 @@ sensor communication. It has no ROS2 dependency and emits one Apache Arrow
    cargo install dora-cli
    ```
 
-3. Build the node:
+3. Build the node in the default `build/` directory:
 
    ```bash
    cmake --build build -j
@@ -95,7 +95,18 @@ step range, and clustering and is therefore not part of the static schema.
 - dora CLI (`cargo install dora-cli` or the official installation method)
 - prebuilt dora C++ libraries extracted from a `dora-cpp-libraries-<target>`
   archive published by dora-rs
-- Apache Arrow C++ (the current dora example requires Arrow 19.0.1 or newer)
+- Apache Arrow C++ installed through the official Apache APT repository on
+  Ubuntu 22.04:
+
+  ```bash
+  sudo apt update
+  sudo apt install -y -V ca-certificates lsb-release wget
+  wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+  sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+  sudo apt update
+  sudo apt install -y -V libarrow-dev
+  ```
+
 - yaml-cpp
 - urg_library C API (included as a pinned Git submodule)
 
@@ -124,8 +135,8 @@ packages. In particular, it does not depend on `rclcpp`, `rclcpp_components`,
 C++, yaml-cpp, CMake/C++ tooling, Rust/Cargo, Git, and the dora CLI.
 
 Install Arrow and yaml-cpp through the platform package manager. Arrow's
-official installation instructions are linked from the
-[dora C++ Arrow example](https://github.com/dora-rs/dora/tree/main/examples/c%2B%2B-arrow-dataflow).
+official Ubuntu APT instructions are listed on the
+[Apache Arrow install page](https://arrow.apache.org/install/).
 
 ## Build and test
 
@@ -194,7 +205,19 @@ dora run dataflow/urg_dora.yaml
 
 From the repository root, `dataflow/urg_dora.yaml` resolves the node binary and
 config relative to the `dataflow/` directory, so no path edits are needed for
-the example layout.
+the example layout. Use the single default build tree:
+
+```bash
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH=/home/koki/dora_ws/dora-cpp-libraries-linux-x86_64
+cmake --build build -j
+```
+
+If a dataflow named `urg` is already running, stop it first:
+
+```bash
+dora down
+```
 
 Current dora source nodes do not receive `AllInputsClosed` merely because they
 have zero inputs. The C++ node therefore drives scans itself and uses the

@@ -89,7 +89,17 @@ v0.1 で明示的に非対応:
 - Linux、C++20 コンパイラ、CMake 3.21 以上、Rust/Cargo、Git
 - dora CLI（`cargo install dora-cli` など、公式の方法で別途入れる）
 - prebuilt の dora C++ libraries（`dora-cpp-libraries-<target>` archive を展開したもの）
-- Apache Arrow C++（現行の dora C++ 例では Arrow 19.0.1 以上が必要）
+- Apache Arrow C++。Ubuntu 22.04 では Apache 公式の APT リポジトリを使います:
+
+  ```bash
+  sudo apt update
+  sudo apt install -y -V ca-certificates lsb-release wget
+  wget https://packages.apache.org/artifactory/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+  sudo apt install -y -V ./apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb
+  sudo apt update
+  sudo apt install -y -V libarrow-dev
+  ```
+
 - yaml-cpp
 - urg_library C API（Git submodule として同梱）
 
@@ -103,9 +113,9 @@ v0.1 で明示的に非対応:
 
 upstream の `urg_node2` と違い、このプロジェクトは rosdep、ament、ROS2 パッケージを使いません。具体的には `rclcpp`、`rclcpp_components`、`rclcpp_lifecycle`、`lifecycle_msgs`、`sensor_msgs`、`diagnostic_updater`、`laser_proc` には依存しません。残る非 ROS 依存は Arrow C++、yaml-cpp、CMake/C++ ツールチェーン、Rust/Cargo、Git、dora CLI です。
 
-Arrow と yaml-cpp は OS のパッケージマネージャで入れてください。Arrow の公式インストール手順は
-[dora C++ Arrow example](https://github.com/dora-rs/dora/tree/main/examples/c%2B%2B-arrow-dataflow)
-から辿れます。
+Arrow と yaml-cpp は OS のパッケージマネージャで入れてください。Arrow の Ubuntu 向け公式 APT 手順は
+[Apache Arrow の install ページ](https://arrow.apache.org/install/)
+にあります。
 
 ## ビルドとテスト
 
